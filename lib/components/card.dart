@@ -2,12 +2,15 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:flame/components.dart';
+import 'package:flame/events.dart';
 import 'package:flutter_sample_application/klondike_game.dart';
 
 import '../rank.dart';
 import '../suit.dart';
+import 'pile.dart';
+import 'tableau_pile.dart';
 
-class Card extends PositionComponent {
+class Card extends PositionComponent with DragCallbacks {
   Card(int intRank, int intSuit)
       : rank = Rank.fromInt(intRank),
         suit = Suit.fromInt(intSuit),
@@ -16,7 +19,10 @@ class Card extends PositionComponent {
 
   final Rank rank;
   final Suit suit;
+  Pile? pile;
   bool _faceUp;
+  bool _isDragging = false;
+  final List<Card> attachedCards = [];
 
   bool get isFaceUp => _faceUp;
   bool get isFaceDown => !_faceUp;
@@ -24,6 +30,62 @@ class Card extends PositionComponent {
 
   @override
   String toString() => rank.label + suit.label;
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    super.onDragStart(event);
+    if (pile?.canMoveCard(this) ?? false) {
+      _isDragging = true;
+      priority = 100;
+      if (pile is TableauPile) {
+        attachedCards.clear();
+        final extraCards = (pile! as TableauPile).cardsOnTop(this);
+        for (final card in extraCards) {
+          card.priority = attachedCards.length + 101;
+          attachedCards.add(card);
+        }
+      }
+    }
+  }
+
+  @override
+  void onDragUpdate(DragUpdateEvent event) {
+    if (!_isDragging) {
+      return;
+    }
+    final delta = event.localDelta;
+    position.add(delta);
+    attachedCards.forEach((card) => card.position.add(delta));
+  }
+
+  @override
+  void onDragEnd(DragEndEvent event) {
+    if (!_isDragging) {
+      return;
+    }
+    super.onDragEnd(event);
+    _isDragging = false;
+    final dropPiles = parent!
+        .componentsAtPoint(position + size / 2)
+        .whereType<Pile>()
+        .toList();
+    if (dropPiles.isNotEmpty) {
+      if (dropPiles.first.canAcceptCard(this)) {
+        pile!.removeCard(this);
+        dropPiles.first.acquireCard(this);
+        if (attachedCards.isNotEmpty) {
+          attachedCards.forEach((card) => dropPiles.first.acquireCard(card));
+          attachedCards.clear();
+        }
+        return;
+      }
+    }
+    pile!.returnCard(this);
+    if (attachedCards.isNotEmpty) {
+      attachedCards.forEach((card) => pile!.returnCard(card));
+      attachedCards.clear();
+    }
+  }
 
   @override
   void render(Canvas canvas) {

@@ -1,6 +1,10 @@
-import 'package:flame/components.dart';
 
-class Pile extends PositionComponent {
-  @override
-  bool get debugMode => true;
+import 'card.dart';
+
+abstract class Pile{
+  bool canMoveCard(Card card);
+  bool canAcceptCard(Card card);
+  void removeCard(Card card);
+  void returnCard(Card card);
+  void acquireCard(Card card);
 }
